@@ -1,12 +1,12 @@
-import 'dart:convert';
 import 'dart:developer';
 import 'package:get/get.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../models/article_model.dart';
 import '../services/news_service.dart';
+import '../services/favorites_service.dart';
 
 class NewsController extends GetxController {
   final NewsService _newsService = NewsService();
+  final FavoritesService _favoritesService = FavoritesService();
 
   var articles = <Article>[].obs;
   var isLoading = true.obs;
@@ -16,18 +16,16 @@ class NewsController extends GetxController {
   void onInit() {
     super.onInit();
     fetchArticles();
-    loadFavorites();
+    loadFavoritesFromBackend();
   }
 
-  /// Fetch articles from API
+  /// Fetch articles from News API
   void fetchArticles() async {
     try {
       isLoading(true);
       final fetchedArticles = await _newsService.fetchArticles();
-
-      log('✅ Fetched ${fetchedArticles.length} articles'); // Log the count
-
       articles.assignAll(fetchedArticles);
+      log('✅ Articles fetched: ${fetchedArticles.length}');
     } catch (e, stackTrace) {
       log('❌ Error fetching articles: $e', stackTrace: stackTrace);
     } finally {
@@ -35,42 +33,34 @@ class NewsController extends GetxController {
     }
   }
 
-  /// Toggle favorite status of an article
-void toggleFavorite(Article article) {
-  if (isFavorite(article)) {
-    favorites.removeWhere((a) => a.url == article.url);
-  } else {
-    favorites.add(article);
+  /// Toggle favorite article
+  void toggleFavorite(Article article) async {
+    try {
+      if (isFavorite(article)) {
+        favorites.removeWhere((a) => a.url == article.url);
+        await _favoritesService.deleteFavorite(article.url);
+      } else {
+        favorites.add(article);
+        await _favoritesService.addFavorite(article);
+      }
+    } catch (e) {
+      log('❌ Error toggling favorite: $e');
+    }
   }
 
-  // Save in the background without blocking UI
-  Future.microtask(() => saveFavorites());
-}
-
-  /// Check if article is already a favorite
+  /// Check if an article is a favorite
   bool isFavorite(Article article) {
     return favorites.any((a) => a.url == article.url);
   }
 
-  /// Save favorites to local storage
-  void saveFavorites() async {
-    final prefs = await SharedPreferences.getInstance();
-    final favJsonList = favorites.map((article) => jsonEncode(article.toJson())).toList();
-    await prefs.setStringList('favorites', favJsonList);
-  }
-
-  /// Load favorites from local storage
-  void loadFavorites() async {
-    final prefs = await SharedPreferences.getInstance();
-    final favJsonList = prefs.getStringList('favorites') ?? [];
-
-    favorites.value = favJsonList.map((item) {
-      try {
-        return Article.fromJson(jsonDecode(item));
-      } catch (e) {
-        log('⚠️ Error decoding favorite: $e');
-        return null;
-      }
-    }).whereType<Article>().toList();
+  /// Load favorites from backend
+  void loadFavoritesFromBackend() async {
+    try {
+      final fetchedFavorites = await _favoritesService.fetchFavorites();
+      favorites.assignAll(fetchedFavorites);
+      log('📥 Favorites loaded: ${fetchedFavorites.length}');
+    } catch (e) {
+      log('❌ Error loading favorites: $e');
+    }
   }
 }

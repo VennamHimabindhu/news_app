@@ -6,7 +6,7 @@ import 'details_page.dart';
 class HomePage extends StatelessWidget {
   final NewsController controller = Get.find(); // or Get.put() if not already registered
 
-  HomePage({super.key}); // ❌ removed `const`
+  HomePage({super.key}); // ❌ removed const
 
   @override
   Widget build(BuildContext context) {
